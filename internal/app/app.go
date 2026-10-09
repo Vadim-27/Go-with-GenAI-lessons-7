@@ -35,6 +35,8 @@ func NewRouter() http.Handler {
 	r.RedirectTrailingSlash = false
 	r.NoRoute(handler.NotFound)
 	r.GET("/health", handler.Health)
+	r.GET("/openapi.yaml", handler.OpenAPI)
+	r.GET("/swagger", handler.SwaggerUI)
 
 	// Новий ресурс — це ще один виклик Register тут.
 	api := r.Group("/api/v1")
