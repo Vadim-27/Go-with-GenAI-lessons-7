@@ -4,18 +4,37 @@
 // organise the rest of the code (model, repository, handler, middleware) as you like.
 package app
 
-import "net/http"
+import (
+	"net/http"
 
-// NewRouter must return a fully configured HTTP handler for your resource.
+	"github.com/gin-gonic/gin"
+
+	"homework/internal/handler"
+	"homework/internal/repository"
+)
+
+func init() {
+	// Вимикаємо debug-режим Gin: без банера та таблиці маршрутів у логах.
+	gin.SetMode(gin.ReleaseMode)
+}
+
+// NewRouter повертає повністю налаштований HTTP-обробник ресурсу books.
 //
-// Requirements (see README.md for the full contract):
-//   - every call returns a NEW router with its own EMPTY in-memory storage;
-//   - it must be safe for concurrent requests;
-//   - it can be built with net/http, gin, chi or any other router.
-//
-// TODO: replace this stub with your implementation.
+// Кожен виклик будує НОВИЙ роутер зі своїм ПОРОЖНІМ сховищем у пам'яті,
+// тому роутери ніколи не ділять стан між собою.
 func NewRouter() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "not implemented", http.StatusNotImplemented)
-	})
+	repo := repository.NewMemoryRepository()
+	books := handler.NewBookHandler(repo)
+
+	r := gin.New()
+	// Шлях зі слешем наприкінці — це інший, незареєстрований маршрут (404 JSON), а не редирект 307.
+	r.RedirectTrailingSlash = false
+	r.NoRoute(handler.NotFound)
+	r.GET("/health", handler.Health)
+
+	// Новий ресурс — це ще один виклик Register тут.
+	api := r.Group("/api/v1")
+	books.Register(api)
+
+	return r
 }
