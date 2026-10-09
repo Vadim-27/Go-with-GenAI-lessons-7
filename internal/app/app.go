@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"homework/internal/handler"
+	"homework/internal/middleware"
 	"homework/internal/repository"
 )
 
@@ -27,6 +28,9 @@ func NewRouter() http.Handler {
 	books := handler.NewBookHandler(repo)
 
 	r := gin.New()
+	// Порядок важливий: Logger ззовні, щоб бачити і 500 після паніки;
+	// Recovery перед CORS, а CORS ставить заголовки ще до хендлера.
+	r.Use(middleware.Logger(), middleware.Recovery(), middleware.CORS())
 	// Шлях зі слешем наприкінці — це інший, незареєстрований маршрут (404 JSON), а не редирект 307.
 	r.RedirectTrailingSlash = false
 	r.NoRoute(handler.NotFound)
