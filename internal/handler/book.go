@@ -4,13 +4,22 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"homework/internal/model"
 	"homework/internal/repository"
+)
+
+// Параметри пагінації списку.
+const (
+	defaultPage  = 1
+	defaultLimit = 10
+	maxLimit     = 100
 )
 
 // BookHandler містить HTTP-обробники ресурсу books.
@@ -28,6 +37,7 @@ func NewBookHandler(repo repository.BookRepository) *BookHandler {
 // володіє своїми маршрутами, тому app.go не росте з кожним новим ресурсом.
 func (h *BookHandler) Register(r *gin.RouterGroup) {
 	r.POST("/books", h.CreateBook)
+	r.GET("/books", h.ListBooks)
 	r.GET("/books/:id", h.GetBook)
 	r.PUT("/books/:id", h.UpdateBook)
 	r.DELETE("/books/:id", h.DeleteBook)
@@ -41,6 +51,26 @@ func (h *BookHandler) CreateBook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, h.repo.Create(book))
+}
+
+// ListBooks відповідає на GET /api/v1/books?page=1&limit=10&category=go.
+// Порожня категорія означає «без фільтра».
+func (h *BookHandler) ListBooks(c *gin.Context) {
+	page, ok := queryPositiveInt(c, "page", defaultPage)
+	if !ok {
+		respondError(c, http.StatusBadRequest, model.CodeInvalidPagination, "Invalid page")
+		return
+	}
+	limit, ok := queryPositiveInt(c, "limit", defaultLimit)
+	if !ok {
+		respondError(c, http.StatusBadRequest, model.CodeInvalidPagination, "Invalid limit")
+		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	c.JSON(http.StatusOK, h.repo.List(c.Query("category"), page, limit))
 }
 
 // GetBook відповідає на GET /api/v1/books/{id}.
@@ -128,6 +158,28 @@ func decodeBody(c *gin.Context, dst any) error {
 		return errors.New("unexpected data after JSON body")
 	}
 	return nil
+}
+
+// queryPositiveInt читає цілий параметр запиту >= 1. Якщо параметра немає,
+// повертає def. Для нецілого, нульового чи від'ємного значення повертає false.
+// Надто велике додатне число обмежується math.MaxInt, щоб не давати 500.
+func queryPositiveInt(c *gin.Context, key string, def int) (int, bool) {
+	raw, present := c.GetQuery(key)
+	if !present {
+		return def, true
+	}
+
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if errors.Is(err, strconv.ErrRange) && !strings.HasPrefix(raw, "-") {
+		return math.MaxInt, true
+	}
+	if err != nil || n < 1 {
+		return 0, false
+	}
+	if n > math.MaxInt {
+		return math.MaxInt, true
+	}
+	return int(n), true
 }
 
 // parseID читає параметр шляху {id}. Приймає лише 0..4294967295; для
